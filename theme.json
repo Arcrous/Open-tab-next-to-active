@@ -1,7 +1,7 @@
 {
   "id": "new-tab-next-to-active",
   "name": "Tab tweaks (split-view new tabs + stack labels)",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Opens new tabs after the whole split view group (alongside Firefox insertAfterCurrent) and names tab groups after their last used tab, like Vivaldi stacks.",
   "author": "Arcrous",
   "homepage": "https://github.com/Arcrous/Open-tab-next-to-active",
