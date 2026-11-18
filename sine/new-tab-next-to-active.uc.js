@@ -8,7 +8,7 @@
 // (Ctrl+Shift+J) for a quick test; re-pasting replaces the previous copy.
 
 (() => {
-  const DEBUG = true;   // set to false once it behaves
+  const DEBUG = false;  // set to true to log what the mod does
   const win = Services.wm.getMostRecentWindow("navigator:browser");
   const gb = win.gBrowser;
   const log = (...a) => console.log("[newtabnext]", ...a);
@@ -44,6 +44,13 @@
     else gb.moveTabTo(tab, { tabIndex: after._tPos + 1 });
   }
 
+  // Zen scrolls the sidebar to wherever it first inserted the new tab (the top).
+  // After we move the tab next to the active one, scroll it back into view.
+  function reveal(tab) {
+    if (!tab.isConnected || !tab.selected) return;
+    try { tab.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "instant" }); } catch (e) {}
+  }
+
   function place(tab, anchor) {
     if (!anchor || anchor === tab || !anchor.isConnected) return;
     let after = endOfSplit(anchor);
@@ -53,17 +60,19 @@
     try {
       moveAfter(tab, after);
       lastPlaced.set(anchor, tab);
+      reveal(tab);
       dbg("now", d(tab), "| tab before it:", d(gb.tabs[tab._tPos - 1]), "| after it:", d(gb.tabs[tab._tPos + 1]));
     } catch (e) { log("move failed", e); return; }
 
-    // Zen may reposition new tabs on its own a moment later: check again and win.
-    for (const ms of [150, 600]) {
+    // Zen may reposition / scroll on its own a moment later: check again and win.
+    for (const ms of [50, 150, 600]) {
       setTimeout(() => {
         if (!tab.isConnected || !after.isConnected) return;
         if (tab._tPos !== after._tPos + 1) {
           dbg(`moved by something else (${ms}ms): now`, d(tab), "-> re-placing after", d(after));
           try { moveAfter(tab, after); } catch (e) {}
         }
+        reveal(tab);
       }, ms);
     }
   }
