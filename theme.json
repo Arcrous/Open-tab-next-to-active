@@ -1,19 +1,31 @@
 {
   "id": "new-tab-next-to-active",
-  "name": "New tab next to active tab",
-  "version": "1.1.2",
-  "description": "Leaves Firefox insertAfterCurrent alone and only fixes new-tab placement when the active tab is in a Zen split view.",
+  "name": "Tab tweaks (split-view new tabs + stack labels)",
+  "version": "1.2.0",
+  "description": "Opens new tabs after the whole split view group (alongside Firefox insertAfterCurrent) and names tab groups after their last used tab, like Vivaldi stacks.",
   "author": "Arcrous",
   "homepage": "https://github.com/Arcrous/Open-tab-next-to-active",
   "readme": "https://raw.githubusercontent.com/Arcrous/Open-tab-next-to-active/main/README.md",
   "createdAt": "2026-11-18",
-  "tags": ["tabs"],
-  "fork": ["zen"],
+  "tags": [
+    "tabs"
+  ],
+  "fork": [
+    "zen"
+  ],
   "scripts": {
     "sine/new-tab-next-to-active.uc.js": {
-      "include": ["chrome://browser/content/browser.xhtml"],
+      "include": [
+        "chrome://browser/content/browser.xhtml"
+      ],
       "loadOrder": 10
+    },
+    "sine/stack-group-labels.uc.js": {
+      "include": [
+        "chrome://browser/content/browser.xhtml"
+      ],
+      "loadOrder": 20
     }
   },
-  "updatedAt": "2026-11-19T01:00:00Z"
+  "updatedAt": "2026-11-19T12:00:00Z"
 }

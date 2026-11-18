@@ -14,7 +14,7 @@
 // This script only handles that case; everything else is untouched.
 
 (() => {
-  const DEBUG = false;   // logs how split view is detected; set to false once it works
+  const DEBUG = false;  // set to true to log how split view is detected
   const win = Services.wm.getMostRecentWindow("navigator:browser");
   const gb = win.gBrowser;
   const log = (...a) => console.log("[newtabnext]", ...a);
