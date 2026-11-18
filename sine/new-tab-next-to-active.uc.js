@@ -4,8 +4,12 @@
 // @include      main
 // ==/UserScript==
 
-// Works as a .uc.js (chrome/JS) and can also be pasted into the Browser Console
+// Works as a .uc.js (Sine mod / chrome/JS) and can also be pasted into the Browser Console
 // (Ctrl+Shift+J) for a quick test; re-pasting replaces the previous copy.
+//
+// How it works: addTab() is wrapped so the tab is inserted at the right index from the start
+// (no later move, so no flash). A TabOpen fallback moves it afterwards if Zen ignored that.
+// The sidebar scroll position is saved before the tab opens and restored afterwards.
 
 (() => {
   const DEBUG = false;  // set to true to log what the mod does
@@ -20,13 +24,15 @@
   let cur = gb.selectedTab;
   let prev = null;
   let lastPlaced = new Map();   // anchor tab -> last tab we placed after it
+  let pending = null;           // set by the addTab wrapper, consumed by TabOpen
+
+  // ---- helpers ---------------------------------------------------------------------------
 
   // If the anchor is half of a Zen split view, go to the end of that split group
   // (best effort: Zen's internals are not documented, so this is defensive).
   function endOfSplit(anchor) {
     try {
       const data = win.gZenViewSplitter?._data;
-      dbg("split data:", Array.isArray(data) ? `${data.length} group(s)` : typeof data);
       if (Array.isArray(data)) {
         const group = data.find(g => g.tabs?.includes(anchor));
         if (group?.tabs?.length) {
@@ -39,61 +45,106 @@
     return anchor;
   }
 
+  function computeAfter(anchor, tab) {
+    let after = endOfSplit(anchor);
+    const chained = lastPlaced.get(anchor);
+    if (chained && chained.isConnected && chained !== tab) after = chained;
+    return after;
+  }
+
   function moveAfter(tab, after) {
     if (typeof gb.moveTabAfter === "function") gb.moveTabAfter(tab, after);
     else gb.moveTabTo(tab, { tabIndex: after._tPos + 1 });
   }
 
-  // Zen scrolls the sidebar to wherever it first inserted the new tab (the top).
-  // After we move the tab next to the active one, scroll it back into view.
+  // Remember every scrolled ancestor of an element (the sidebar's scroll container(s))
+  function scrollSnapshot(el) {
+    const snap = [];
+    for (let n = el?.parentElement; n; n = n.parentElement) {
+      if (n.scrollHeight > n.clientHeight + 1) snap.push([n, n.scrollTop]);
+    }
+    return snap;
+  }
+
+  function restoreScroll(snap) {
+    for (const [n, top] of snap) {
+      if (Math.abs(n.scrollTop - top) > 1) {
+        if (typeof n.scrollTo === "function") n.scrollTo({ top, behavior: "instant" });
+        else n.scrollTop = top;
+      }
+    }
+  }
+
   function reveal(tab) {
-    if (!tab.isConnected || !tab.selected) return;
     try { tab.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "instant" }); } catch (e) {}
   }
 
-  function place(tab, anchor) {
-    if (!anchor || anchor === tab || !anchor.isConnected) return;
-    let after = endOfSplit(anchor);
-    const chained = lastPlaced.get(anchor);
-    if (chained && chained.isConnected && chained !== tab) after = chained;
-    dbg("new tab", d(tab), "| anchor", d(anchor), "| placing after", d(after));
-    try {
-      moveAfter(tab, after);
-      lastPlaced.set(anchor, tab);
-      reveal(tab);
-      dbg("now", d(tab), "| tab before it:", d(gb.tabs[tab._tPos - 1]), "| after it:", d(gb.tabs[tab._tPos + 1]));
-    } catch (e) { log("move failed", e); return; }
-
-    // Zen may reposition / scroll on its own a moment later: check again and win.
-    for (const ms of [50, 150, 600]) {
+  // Zen may move / scroll things a moment after the tab opens: check again and win.
+  function settle(tab, after, snap) {
+    for (const ms of [0, 50, 150, 400, 900]) {
       setTimeout(() => {
-        if (!tab.isConnected || !after.isConnected) return;
-        if (tab._tPos !== after._tPos + 1) {
+        if (!tab.isConnected) return;
+        if (after?.isConnected && tab._tPos !== after._tPos + 1) {
           dbg(`moved by something else (${ms}ms): now`, d(tab), "-> re-placing after", d(after));
           try { moveAfter(tab, after); } catch (e) {}
         }
-        reveal(tab);
+        if (tab.selected) { restoreScroll(snap); reveal(tab); }
       }, ms);
     }
   }
+
+  // ---- 1) wrap addTab: insert at the right index from the start -----------------------------
+
+  const origAddTab = gb.addTab;
+  function wrappedAddTab(uri, opts) {
+    try {
+      opts = opts || {};
+      if (opts.tabIndex === undefined && !opts.pinned && !opts.createLazyBrowser) {
+        let anchor = opts.ownerTab || (opts.relatedToCurrent ? gb.selectedTab : null);
+        if (!anchor && !opts.inBackground) anchor = gb.selectedTab;   // Ctrl+T etc.
+        // background tab without an opener (e.g. scripted imports): leave alone
+        if (anchor && anchor.isConnected && !anchor.pinned) {
+          const after = computeAfter(anchor, null);
+          pending = { anchor, after, snap: scrollSnapshot(anchor) };
+          opts = Object.assign({}, opts, { tabIndex: after._tPos + 1 });
+          dbg("addTab: anchor", d(anchor), "-> tabIndex", opts.tabIndex);
+        }
+      }
+    } catch (e) { log("addTab wrapper failed", e); pending = null; }
+    return origAddTab.call(this, uri, opts);
+  }
+  gb.addTab = wrappedAddTab;
+
+  // ---- 2) events: bookkeeping + fallback for tabs we couldn't place up front ---------------
 
   const onSelect = (e) => { prev = cur; cur = e.target; lastPlaced = new Map(); };
 
   const onOpen = (e) => {
     const tab = e.target;
-    if (tab.pinned) return;
-    const owner = tab.owner;                 // set for tabs opened from another tab
-    const selectedNow = gb.selectedTab;      // TabOpen fires before a foreground tab is selected
-    dbg("TabOpen: owner", d(owner), "| selected at open", d(selectedNow));
+    if (tab.pinned) { pending = null; return; }
+
+    if (pending) {                                   // placed by the addTab wrapper
+      const p = pending; pending = null;
+      lastPlaced.set(p.anchor, tab);
+      dbg("TabOpen: expected after", d(p.after), "| tab is at", d(tab));
+      settle(tab, p.after, p.snap);                  // fixes it if Zen ignored tabIndex
+      return;
+    }
+
+    // Fallback: tab opened some way that bypassed addTab()
+    const owner = tab.owner;
+    const selectedNow = gb.selectedTab;
+    const snap = scrollSnapshot(owner || selectedNow);
     setTimeout(() => {
       if (!tab.isConnected) return;
-      if (owner) {
-        place(tab, owner);                   // links / related tabs: next to the opener
-      } else if (tab.selected) {
-        place(tab, selectedNow !== tab ? selectedNow : prev);   // Ctrl+T etc.
-      } else {
-        dbg("background tab without opener: left alone");
-      }
+      let anchor = null;
+      if (owner) anchor = owner;
+      else if (tab.selected) anchor = selectedNow !== tab ? selectedNow : prev;
+      if (!anchor || anchor === tab || !anchor.isConnected) return;
+      const after = computeAfter(anchor, tab);
+      dbg("fallback: new tab", d(tab), "| anchor", d(anchor), "| placing after", d(after));
+      try { moveAfter(tab, after); lastPlaced.set(anchor, tab); } catch (err) { log("move failed", err); return; }
+      settle(tab, after, snap);
     }, 0);
   };
 
@@ -104,6 +155,7 @@
     cleanup() {
       gb.tabContainer.removeEventListener("TabSelect", onSelect);
       gb.tabContainer.removeEventListener("TabOpen", onOpen);
+      if (gb.addTab === wrappedAddTab) gb.addTab = origAddTab;
     },
   };
   log("loaded");
