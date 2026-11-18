@@ -1,0 +1,19 @@
+{
+  "id": "new-tab-next-to-active",
+  "name": "New tab next to active tab",
+  "version": "1.0.0",
+  "description": "Opens new tabs right after the active (or opener) tab, also with Zen split view.",
+  "author": "Arcrous",
+  "homepage": "https://github.com/Arcrous/Open-tab-next-to-active",
+  "readme": "https://raw.githubusercontent.com/Arcrous/Open-tab-next-to-active/main/README.md",
+  "createdAt": "2026-11-18",
+  "tags": ["tabs"],
+  "fork": ["zen"],
+  "scripts": {
+    "sine/new-tab-next-to-active.uc.js": {
+      "include": ["chrome://browser/content/browser.xhtml"],
+      "loadOrder": 10
+    }
+  },
+  "updatedAt": "2026-11-18T00:00:00Z"
+}
