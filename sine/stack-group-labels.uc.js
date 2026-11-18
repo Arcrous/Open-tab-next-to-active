@@ -67,11 +67,11 @@
   gb.tabContainer.addEventListener("TabGroupCreate", onGroupCreate);
 
   // Label every existing group after its most recently used tab: after session restore settles
-  const timers = [8000, 30000].map(ms => setTimeout(() => {
+  /*const timers = [8000, 30000].map(ms => setTimeout(() => {
     let n = 0;
     for (const g of allGroups()) { apply(g, mostRecent(g)); n++; }
-    dbg("startup pass over", n, "groups");
-  }, ms));
+    db1g("startup pass over", n, "groups");
+  }, ms));*/
 
   win.__stackLabels = {
     cleanup() {
