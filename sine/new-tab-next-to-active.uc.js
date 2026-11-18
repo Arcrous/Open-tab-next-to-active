@@ -19,7 +19,9 @@
   const gb = win.gBrowser;
   const log = (...a) => console.log("[newtabnext]", ...a);
   const dbg = (...a) => { if (DEBUG) log(...a); };
-  const d = (t) => t ? `#${t._tPos} "${String(t.label || "").slice(0, 28)}"` : "none";
+  // Newer Firefox builds no longer have tab._tPos, so fall back to the index in gBrowser.tabs
+  const pos = (t) => (typeof t?._tPos === "number" ? t._tPos : Array.prototype.indexOf.call(gb.tabs, t));
+  const d = (t) => t ? `#${pos(t)} "${String(t.label || "").slice(0, 28)}"` : "none";
 
   if (win.__newTabNext) win.__newTabNext.cleanup();   // safe to re-run
 
@@ -62,13 +64,13 @@
     return null;
   }
 
-  const lastOf = (tabs) => tabs.reduce((a, b) => (b._tPos > a._tPos ? b : a));
+  const lastOf = (tabs) => tabs.reduce((a, b) => (pos(b) > pos(a) ? b : a));
 
   // ---- helpers ---------------------------------------------------------------------------------
 
   function moveAfter(tab, after) {
     if (typeof gb.moveTabAfter === "function") gb.moveTabAfter(tab, after);
-    else gb.moveTabTo(tab, { tabIndex: after._tPos + 1 });
+    else gb.moveTabTo(tab, { tabIndex: pos(after) + 1 });
   }
 
   function scrollSnapshot(el) {
@@ -94,10 +96,12 @@
 
   // Firefox's own logic and Zen may reposition / scroll right after the tab opens: check again and win.
   function settle(tab, after, snap) {
+    let moves = 0;
     for (const ms of [0, 50, 150, 400, 900]) {
       setTimeout(() => {
         if (!tab.isConnected) return;
-        if (after?.isConnected && tab._tPos !== after._tPos + 1) {
+        if (after?.isConnected && moves < 3 && pos(tab) !== pos(after) + 1) {
+          moves++;
           dbg(`tab is at ${d(tab)} (${ms}ms) -> moving after`, d(after));
           try { moveAfter(tab, after); } catch (e) {}
         }
@@ -111,7 +115,7 @@
     if (!group) return null;
     let after = lastOf(group);
     const chained = lastPlaced.get(anchor);
-    if (chained && chained.isConnected && chained !== tab && chained._tPos > after._tPos) after = chained;
+    if (chained && chained.isConnected && chained !== tab && pos(chained) > pos(after)) after = chained;
     return after;
   }
 
@@ -129,7 +133,7 @@
           const after = targetAfter(anchor, null);
           if (after) {
             pending = { anchor, after, snap: scrollSnapshot(anchor) };
-            opts = Object.assign({}, opts, { tabIndex: after._tPos + 1 });
+            opts = Object.assign({}, opts, { tabIndex: pos(after) + 1 });
             dbg("addTab in split view: anchor", d(anchor), "-> tabIndex", opts.tabIndex);
           }
         }
