@@ -1,8 +1,8 @@
 {
   "id": "new-tab-next-to-active",
   "name": "New tab next to active tab",
-  "version": "1.0.2",
-  "description": "Opens new tabs right after the active (or opener) tab, also with Zen split view.",
+  "version": "1.1.0",
+  "description": "Leaves Firefox insertAfterCurrent alone and only fixes new-tab placement when the active tab is in a Zen split view.",
   "author": "Arcrous",
   "homepage": "https://github.com/Arcrous/Open-tab-next-to-active",
   "readme": "https://raw.githubusercontent.com/Arcrous/Open-tab-next-to-active/main/README.md",
@@ -15,5 +15,5 @@
       "loadOrder": 10
     }
   },
-  "updatedAt": "2026-11-18T18:00:00Z"
+  "updatedAt": "2026-11-18T22:00:00Z"
 }
